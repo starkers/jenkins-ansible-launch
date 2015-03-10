@@ -22,17 +22,19 @@ There are a few files here... They should all reside in $JENKINS_HOME/.ssh
 
 ## add a new script at the end of a job
 
+![Jenkins add script](https://raw.githubusercontent.com/starkers/jenkins-ansible-launch/master/img/Selection_131.png "Add a script")
+
+
 It should contain something like this:
 
 ```
-PKEY="$JENKINS_HOME/.ssh/id_rsa_deploy"          # SSH key to be used for git+ansible
-REPO="git@github.com:user/ansible-deploy.git"    # your repo of ansible tasks
-BRANCH="master"                                  # The branch
-TASKS="main.yml something.yml"                   # space seperated list of playbooks to be executed
+export PKEY="$JENKINS_HOME/.ssh/id_rsa_deploy"          # SSH key to be used for git+ansible
+export REPO="git@github.com:user/ansible-deploy.git"    # your repo of ansible tasks
+export BRANCH="master"                                  # The branch
+export TASKS="main.yml something.yml"                   # space seperated list of playbooks to be executed
+export ARGS="--check"                                   # any flags you'd like to throw at "ansible-playbook"  (EG: -vv)
 
-# ^^ you could of course edit ansible-time and make ansible run against *.yml for example
-
-
+bash ~/.ssh/ansible-time
 ```
 
 ## a dedicted repo for ansible tasks/roles

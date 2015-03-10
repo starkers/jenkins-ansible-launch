@@ -1,0 +1,103 @@
+
+if [ X$DEBUG == "Xtrue" ]; then echo "ENABLING DEBUG" ; set -x ; else set +x ; fi
+
+if [ -z ${REPO+x} ];   then echo "ERROR REPO is unset";    exit 1 ; else echo ": $0 : REPO=$REPO"    ; fi
+if [ -z ${BRANCH+x} ]; then echo "ERROR BRANCH is unset";  exit 1 ; else echo ": $0 : BRANCH=$BRANCH"; fi
+if [ -z ${PKEY+x} ];   then echo "ERROR PKEY is unset";    exit 1 ; else echo ": $0 : PKEY=$PKEY"    ; fi
+if [ -z ${TASKS+x} ];  then echo "ERROR TASKS is unset";   exit 1 ; else echo ": $0 : TASKS=$TASKS"  ; fi
+
+#where we're gonna checkout ansible code
+CODE="$WORKSPACE/jenkins-ansible/"
+
+# Prework  -ensure that we have this repo's SSH public in jenkins known_hosts
+if ! grep -q https <<<"$REPO)" ; then
+  REMOTE_HOST="$(echo $REPO | cut -d "@" -f 2 | cut -d ":" -f 1)"
+  foo="$(ssh-keyscan -t rsa "${REMOTE_HOST}" 2>&1  | grep -v "^#")"
+  if ! grep -q "$foo" ~/.ssh/known_hosts ; then
+    #didn't match that key to know_hosts.. add it
+    printf "\n#$REMOTE_HOST\n$foo\n" >> ~/.ssh/known_hosts
+  fi
+fi
+
+
+branch_check(){
+  # checks if we're on $BRANCH, if not attempts to check it out
+
+  BRANCH_CURRENT=$(git rev-parse --abbrev-ref HEAD 2> /dev/null)
+  if [ ! "$BRANCH_CURRENT" == "$BRANCH" ]; then
+    echo ": checking out $BRANCH"
+    git checkout -b $BRANCH origin/$BRANCH
+  fi
+}
+
+# ensure this script exists or else create it
+# this is necessary as a wrapper for ssh
+if [ ! -f ~/.ssh/git-ssh ]; then
+
+cat > ~/.ssh/git-ssh <<EOF
+#!/usr/bin/env bash
+# usage: PKEY=~/.ssh/XXXX-id_rsa GIT_SSH=~/.ssh/git-ssh git clone git@blablabla.com:repo
+if [ -z "$PKEY" ]; then
+  # if PKEY is not specified, run ssh using default keyfile
+  ssh "$@"
+else
+  ssh -i "$PKEY" "$@"
+fi
+EOF
+chmod +x ~/.ssh/git-ssh
+
+fi
+
+
+exit
+
+# checkout logic
+echo ": ansible checkout"
+cd "$WORKSPACE"
+if [ -d "$CODE" ]; then
+  echo ": $CODE exists, doing a git clean then pull"
+  cd "$CODE"
+  branch_check
+  git clean -fdx
+  GIT_SSH=~/.ssh/git-ssh git pull
+ else
+  #mkdir -p "$CODE"
+  #cd "$CODE"
+  echo ": fresh git clone into: $CODE"
+  #don't forget to set PKEY to the private key of choice
+  GIT_SSH=~/.ssh/git-ssh git clone "$REPO" "$CODE"
+  cd "$CODE"
+  branch_check
+fi
+
+set +e  #no more exiting on fail, must clean up ssh-agent and I want ansible to continue even if there was an error
+
+cowsay "Ansbile time"
+if [ $SSH_AGENT_PID ]; then
+  kill $SSH_AGENT_PID
+fi
+
+eval `ssh-agent`
+ssh-add "$PKEY"
+
+export pearshape=0
+for tasks in $TASKS  ; do
+  cowsay "Starting on TASK: $tasks"
+  if [ -f "$tasks" ] ; then
+    ansible-playbook "$tasks"
+    return=$?
+    cowsay "Completed job: $tasks, rc: $return"
+    if [ $return -gt 0 ]; then
+      export pearshape="$return"
+    fi
+  fi
+done
+
+#cleanup
+kill $SSH_AGENT_PID
+
+if [ "$pearshape" -gt 0 ]; then
+    exit 1
+  else
+    exit 0
+fi
