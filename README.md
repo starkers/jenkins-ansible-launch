@@ -32,7 +32,9 @@ export PKEY="$JENKINS_HOME/.ssh/id_rsa_deploy"          # SSH key to be used for
 export REPO="git@github.com:user/ansible-deploy.git"    # your repo of ansible tasks
 export BRANCH="master"                                  # The branch
 export TASKS="main.yml something.yml"                   # space seperated list of playbooks to be executed
+
 export ARGS="--check"                                   # any flags you'd like to throw at "ansible-playbook"  (EG: -vv)
+export DEBUG=true                                       # this enables set -x, anything else will disable it
 
 bash ~/.ssh/ansible-time
 ```
